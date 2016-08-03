@@ -1,0 +1,125 @@
+import rhinoscriptsyntax as rs
+import Rhino as rh
+import System as sys
+ 
+# library to write excel sheets
+from xlwt import Workbook
+ 
+# import grasshopper functions
+import clr
+clr.AddReference("Grasshopper")
+import Grasshopper as gh
+ 
+# tree of arcs ARCS START, MID AND END POINTS
+arcSPt = gh.DataTree[rh.Geometry.Point3d]()
+arcEPt = gh.DataTree[rh.Geometry.Point3d]()
+arcMPt = gh.DataTree[rh.Geometry.Point3d]()
+for i in range(treeOfArcs.BranchCount):
+    p = gh.Kernel.Data.GH_Path(i)
+    Spt = []
+    Ept = []
+    Mpt = []
+    for j in range(treeOfArcs.Branch(i).Count):
+        spt = rh.Geometry.Curve.PointAtStart.GetValue(treeOfArcs.Branch(i)[j])
+        ept = rh.Geometry.Curve.PointAtEnd.GetValue(treeOfArcs.Branch(i)[j])
+        domain = rh.Geometry.Curve.Domain.GetValue(treeOfArcs.Branch(i)[j])
+        t = (domain[1] - domain[0])/2
+        mpt = rh.Geometry.Curve.PointAt(treeOfArcs.Branch(i)[j], t)
+        Spt.append(spt)
+        Ept.append(ept)
+        Mpt.append(mpt)
+    arcSPt.AddRange(Spt, p)
+    arcEPt.AddRange(Ept, p)
+    arcMPt.AddRange(Mpt, p)
+ 
+# creates the title line for the excel spreadsheet
+titleLn = (str("Name"), str("x"), str("y"), str("z"))
+ 
+# file name and file path and sheet name
+fileName = "R-NSEW-__-RA-SPTS.xls"
+fileName2 = "R-NSEW-__-RA-EPTS.xls"
+fileName3 = "R-NSEW-__-RA-MPTS.xls"
+filePath = windowsPath+fileName
+filePath2 = windowsPath+fileName2
+filePath3 = windowsPath+fileName3
+sheetName = (str("StartPoints"), str("EndPoints"), str("MidPoints"))
+ 
+# location and curve type
+bay = (str("N"), str("S"), str("E"), str("W"))
+crvCode = (str("RA"))
+ptCode = (str("SP"), str("EP"), str("MP"))
+ 
+ 
+# point code
+def PointCode(points, curveCode, bay, pointCode):
+    #ptName = gh.DataTree[rh.Geometry.Point3d]()
+    ptName = gh.DataTree[sys.String]()
+    for k in range(len(pointCode)):
+        path = gh.Kernel.Data.GH_Path(k)
+        pc = []
+        for i in range(points.BranchCount):
+            for j in range(points.Branch(i).Count):
+                if (i == 1):
+                    pointName = "R - "+bay[i]+" - __ - "+curveCode+" - "+pointCode[k]+str(j+1).zfill(2)
+                else:
+                    pointName = "R - "+bay[i]+" - __ - "+curveCode+" - "+pointCode[k]+str(j+2).zfill(2)
+                pc.append(pointName)
+        ptName.AddRange(pc, path)
+    return ptName
+ 
+pC =  PointCode(arcSPt, crvCode, bay, ptCode)
+ 
+ 
+# point as string
+def PointsAsString(pointCode, points1, points2, points3):
+    allList = []
+    eList = []
+    mList = []
+    for i in range(points1.BranchCount):
+        for j in range(points1.Branch(i).Count):
+            #pt = rs.PointCoordinates(branchList[k])
+            pt1 = rh.Geometry.Point3d(round(points1.Branch(i)[j].X, 4), round(points1.Branch(i)[j].Y, 4), round(points1.Branch(i)[j].Z, 4))
+            pt2 = rh.Geometry.Point3d(round(points2.Branch(i)[j].X, 4), round(points2.Branch(i)[j].Y, 4), round(points2.Branch(i)[j].Z, 4))
+            pt3 = rh.Geometry.Point3d(round(points3.Branch(i)[j].X, 4), round(points3.Branch(i)[j].Y, 4), round(points3.Branch(i)[j].Z, 4))
+            allList.append(rh.Geometry.Point3d.ToString(pt1))
+            eList.append(rh.Geometry.Point3d.ToString(pt2))
+            mList.append(rh.Geometry.Point3d.ToString(pt3))
+               
+    Pt = gh.DataTree[sys.String]()
+    path = []
+    for k in range(len(pointCode)):
+        path.append(gh.Kernel.Data.GH_Path(k))
+    #for i in range(len(allList)):
+    Pt.AddRange(allList, path[0])
+    Pt.AddRange(eList, path[1])
+    Pt.AddRange(mList, path[2])
+    return Pt
+ 
+pS = PointsAsString(ptCode, arcSPt, arcEPt, arcMPt)
+ 
+ 
+def WriteExcel(path, columnTitle, colWidth, sheet_name, pc, ps):
+    book = Workbook()
+   
+    sheet1 = book.add_sheet(sheet_name)
+ 
+    for j in range(len(columnTitle)):#columns
+        if (j == 0):
+            sheet1.col(j).width = colWidth
+        else:
+            sheet1.col(j).width = colWidth*0.5
+        sheet1.write(0, j, columnTitle[j])
+        for i in range(len(pc)):#lines
+            if (j == 0):
+                sheet1.write(i+1, j, pc[i])
+            else:
+                item = ps[i].split(",")
+                sheet1.write(i+1, j, float(item[j-1]))
+    book.save(path)
+ 
+ 
+if (activate):
+    WriteExcel(filePath, titleLn, 6000, sheetName[0], pC.Branch(0), pS.Branch(0))
+    WriteExcel(filePath2, titleLn, 6000, sheetName[1], pC.Branch(1), pS.Branch(1))
+    WriteExcel(filePath3, titleLn, 6000, sheetName[2], pC.Branch(2), pS.Branch(2))
+    message = "points successufully exported to "+" "+filePath
