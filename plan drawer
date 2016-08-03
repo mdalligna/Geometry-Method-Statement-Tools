@@ -1,0 +1,292 @@
+import rhinoscriptsyntax as rs
+import Rhino as r
+
+# get bay curves
+columns01 = rs.GetObjects("pick columns 01", 4)
+columns02 = rs.GetObjects("pick column 02", 4)
+
+panels = rs.GetObjects("pick panels", 4)
+circles = rs.GetObjects("get circles", rs.filter.curve)
+
+# get grid curves
+gridcrvs1 = rs.GetObjects("pick grid curves1", 4)
+gridcrvs1a = rs.GetObjects("pick grid curves1a", 4)
+gridcrvs2 = rs.GetObjects("pick grid curves2", 4)
+
+mullion = rs.GetObjects("pick mullion", 0, True)
+
+rs.EnableRedraw(True)
+
+numBays = 25
+halfBays = 13
+bayname = []
+
+Columns1 = []
+Columns2 = []
+
+Panels = []
+Circles = []
+
+GridCrvs1 = []
+GridCrvs1a = []
+GridCrvs2 = []
+
+Mullions = []
+Group = []
+ 
+Camera = []
+Target = []
+
+C = []
+Xvec = []
+
+CameraPlane = []
+CameraNormal = []
+
+RefOrPt = []
+RefXPt = []
+RefYPt = []
+
+TextRidgeCrv = []
+TextOGC01 = []
+TextOGC02 = []
+TextEdgeCrv = []
+
+
+# creates a layer for every bay
+for i in range(numBays):
+    bayname.append("bay"+str(i).zfill(2))
+    rs.AddLayer(bayname[i])
+    
+# creates a layer for camera and target
+cameraLocation = "camLoc"
+rs.AddLayer(cameraLocation)
+targetLocation = "tarLoc"
+rs.AddLayer(targetLocation)
+
+##########################################################################
+# sort curves
+##########################################################################
+for i, crv2 in enumerate(columns01):
+    Columns1.append(crv2)    
+    rs.ObjectColor(crv2, (0, 255, 0)) 
+    rs.ObjectPrintWidth(crv2, 0.6)
+    rs.ObjectLayer(crv2, bayname[i])
+
+for i, crv3 in enumerate(columns02):
+    Columns2.append(crv3)    
+    rs.ObjectColor(crv3, (0, 255, 0)) 
+    rs.ObjectPrintWidth(crv3, 0.6)
+    rs.ObjectLayer(crv3, bayname[i])
+
+for i, pnl in enumerate(panels):
+    Panels.append(pnl)    
+    rs.ObjectColor(pnl, (255, 255, 255))
+    rs.ObjectLayer(pnl, bayname[i])
+    
+for i, cir in enumerate(circles):
+    Circles.append(cir)    
+    rs.ObjectColor(cir, (255, 0, 255))
+    rs.ObjectLinetype(cir, "Dot")
+    rs.ObjectLayer(cir, bayname[i]) 
+
+for i, gr1crv in enumerate(gridcrvs1):
+    GridCrvs1.append(gr1crv)    
+    rs.ObjectColor(gr1crv, (255, 127, 0))
+    rs.ObjectPrintWidth(gr1crv, 0.3)
+    rs.ObjectLinetype(gr1crv, "DashDot")
+    rs.ObjectLayer(gr1crv, bayname[i])
+
+for i, gr1acrv in enumerate(gridcrvs1a):
+    GridCrvs1a.append(gr1acrv)    
+    rs.ObjectColor(gr1acrv, (255, 127, 0))
+    rs.ObjectPrintWidth(gr1acrv, 0.3)
+    rs.ObjectLinetype(gr1acrv, "DashDot")
+    rs.ObjectLayer(gr1acrv, bayname[i])
+
+for i, gr2crv in enumerate(gridcrvs2):
+    GridCrvs2.append(gr2crv)    
+    rs.ObjectColor(gr2crv, (255, 127, 0))
+    rs.ObjectPrintWidth(gr2crv, 0.3)
+    rs.ObjectLinetype(gr2crv, "DashDot")
+    rs.ObjectLayer(gr2crv, bayname[i])
+
+
+##########################################################################
+# create 'cameras'
+##########################################################################
+for i in range(numBays):
+    # create camera target
+    target = rs.CurveMidPoint(GridCrvs2[i])
+    tarPt = rs.AddPoint(target)
+    rs.ObjectColor(tarPt, (255, 0, 0))
+    rs.ObjectLayer(tarPt, targetLocation)
+    Target.append(target)
+
+    # create camera
+    camera = rs.CurveMidPoint(GridCrvs2[i])
+    camPt = rs.AddPoint(camera)
+    rs.MoveObject(camPt, (0.0,0.0, 50.0))
+    rs.ObjectLayer(camPt, cameraLocation)
+    Camera.append(camPt)
+    c = rs.PointCoordinates(Camera[i])
+    C.append(c)
+
+    # create xDir
+    xDir = rs.CurveEndPoint(GridCrvs2[i])
+    xdir = rs.AddPoint(xDir)
+    rs.MoveObject(xdir, (0.0,0.0, 50.0))
+    rs.ObjectLayer(xdir, cameraLocation)
+    xDir = rs.PointCoordinates(xdir)
+    RefXPt.append(xDir)
+
+    xline = rs.AddLine(C[i], RefXPt[i])
+    xvec = rs.VectorCreate(C[i], RefXPt[i])
+    rs.VectorUnitize(xvec)
+    Xvec.append(xvec)
+
+    # camera normal
+    normal = rs.AddLine(Camera[i], Target[i])
+    nst = rs.CurveStartPoint(normal)
+    nen = rs.CurveEndPoint(normal)
+    normalVector = rs.VectorCreate(nst, nen)
+    rs.VectorUnitize(normalVector)
+    CameraNormal.append(normalVector)
+    
+    # create yDir
+    ydir = rs.VectorCrossProduct(CameraNormal[i], Xvec[i])
+    orVec = rs.VectorCreate(C[i], (0,0,0))
+    YDir = rs.VectorAdd(ydir, orVec)
+    rs.VectorUnitize(YDir)
+    yd = rs.AddPoint(YDir)
+    Yd = rs.PointCoordinates(yd)
+    RefYPt.append(Yd)
+
+    # ref pts at model location to orient the geometry
+    refOrPt = rs.PointCoordinates(Camera[i])
+    RefOrPt.append(refOrPt)
+
+    # turn off all layers
+    rs.LayerVisible(bayname[i],False)
+    rs.LayerVisible("camLoc",False)
+    rs.LayerVisible("tarLoc",False)
+
+##########################################################################
+# orient geometry
+##########################################################################
+
+# ref pts to reorient the geom
+orPt = rs.AddPoint(0.0, 0.0, 0.0)
+xPt = rs.AddPoint(-2.0, 0.0, 0.0)
+yPt = rs.AddPoint(0.0, 2.0, 0.0)
+
+for i in range(numBays):
+    rs.CurrentLayer("bay"+str(i).zfill(2))# turn on one layer at a time  
+
+# orient geometry - move all  the geometry to the origin WITH CAMERA ROTATION
+    rs.OrientObject(Panels[i], (RefOrPt[i], RefXPt[i], RefYPt[i]), (orPt, xPt, yPt))
+    rs.OrientObject(Circles[i], (RefOrPt[i], RefXPt[i], RefYPt[i]), (orPt, xPt, yPt))
+    
+    rs.OrientObject(GridCrvs1[i], (RefOrPt[i], RefXPt[i], RefYPt[i]), (orPt, xPt, yPt))
+    rs.OrientObject(GridCrvs1a[i], (RefOrPt[i], RefXPt[i], RefYPt[i]), (orPt, xPt, yPt))
+    rs.OrientObject(GridCrvs2[i], (RefOrPt[i], RefXPt[i], RefYPt[i]), (orPt, xPt, yPt))
+    
+    rs.OrientObject(Columns1[i], (RefOrPt[i], RefXPt[i], RefYPt[i]), (orPt, xPt, yPt))
+    rs.OrientObject(Columns2[i], (RefOrPt[i], RefXPt[i], RefYPt[i]), (orPt, xPt, yPt))
+    
+    # leave only last layer on
+    rs.CurrentLayer("Baked")    
+    rs.LayerVisible(bayname[i-1],False) # turn on one layer at a time
+
+##########################################################################
+# orient mullions
+##########################################################################
+def addMullions():
+    centre = rs.ArcCenterPoint(Circles[i])
+    if rs.IsCurve(Panels[i]):
+        domain = rs.CurveDomain(Panels[i])
+        parameter = domain[1] / 2.0
+        cirHalf = rs.SplitCurve(Panels[i], parameter)
+        rs.ReverseCurve(cirHalf[0])
+        points = rs.DivideCurveLength(cirHalf[1], 2.250)
+        points2 = rs.DivideCurveLength(cirHalf[0], 2.250)
+        
+        for j in range(8):
+            if (j % 2 == 1):
+                lines = rs.AddLine(centre, points[j])
+                lines2 = rs.AddLine(centre, points2[j])
+                rs.ExtendCurveLength(lines, 0, 1, 15.0)
+                rs.ExtendCurveLength(lines2, 0, 1, 15.0)
+                rs.ObjectLayer(lines, bayname[i])
+                rs.ObjectLayer(lines2, bayname[i])
+                rs.ObjectLinetype(lines, "Dash")
+                rs.ObjectLinetype(lines2, "Dash")
+
+
+for i in range(len(Panels)):
+    addMullions()
+
+
+"""
+##########################################################################
+# add tags
+##########################################################################
+for i in range(numBays):
+    textPtRC = rs.CurveMidPoint(FacadeCrvs[i])
+    textRC = rs.AddText("Ridge Curve - RC \nRefer to 11, 12, 13", textPtRC, 0.8, 'Arial')
+    TextRidgeCrv.append(textRC)
+    rs.ObjectColor(textRC, (255, 255, 255))
+    rs.ObjectLayer(textRC, "bay"+str(i).zfill(2))
+
+    textPtEC = rs.CurveMidPoint(HorCir[i])
+    textEC = rs.AddText("Edge Curve - EC \nRefer to 14", textPtEC, 0.8, 'Arial')
+    TextEdgeCrv.append(textEC)
+    rs.ObjectColor(textEC, (255, 255, 255))
+    rs.ObjectLayer(textEC, "bay"+str(i).zfill(2))
+
+    textPtOGC01 = rs.CurveMidPoint(Columns1[i])
+    textOGC01 = rs.AddText("Offset Grid Curve 01 - OGC01 \nRefer to 05, 06, 07", textPtOGC01, 0.8, 'Arial')
+    TextOGC01.append(textOGC01)
+    rs.ObjectColor(textOGC01, (255, 255, 255))
+    rs.ObjectLayer(textOGC01, "bay"+str(i).zfill(2))
+
+    textPtOGC02 = rs.CurveMidPoint(Columns2[i])
+    textOGC02 = rs.AddText("Offset Grid Curve 02 - OGC02 \nRefer to 08, 09, 10", textPtOGC02, 0.8, 'Arial')
+    TextOGC02.append(textOGC02)
+    rs.ObjectColor(textOGC02, (255, 255, 255))
+    rs.ObjectLayer(textOGC02, "bay"+str(i).zfill(2))
+"""
+##########################################################################
+# add bubbles
+##########################################################################
+
+radius = 1.0
+def bubbles(origin, layer, text1):
+    bubblePt1 = rs.CurveStartPoint(origin)
+    bPt1 = rs.AddPoint(bubblePt1)
+    bubbleCentre = rs.MoveObject(bPt1, (0.0, -radius, 0.0))
+    bubble = rs.AddCircle(bubbleCentre, radius)
+    bubbleText = rs.AddText(text1, bubbleCentre, 0.7, 'Arial', 0, 2)
+    rs.MoveObject(bubbleText, (0.0, -radius/3, 0.0))
+    rs.ObjectColor(bubble, (255, 127, 0))
+    rs.ObjectLayer(bubble, layer)
+    rs.ObjectColor(bubbleText, (255, 127, 0))
+    rs.ObjectLayer(bubbleText, layer)
+
+for i in range(0, halfBays, 1):
+    if i < halfBays-1:
+        bubbles(GridCrvs1[i], "bay"+str(i).zfill(2), "N"+str(i+1).zfill(2))
+        bubbles(GridCrvs1a[i], "bay"+str(i).zfill(2), "N"+str(i+2).zfill(2))
+    if i == halfBays-1:
+        bubbles(GridCrvs1[i], "bay"+str(i).zfill(2), "N"+str(i+1).zfill(2))
+        bubbles(GridCrvs1a[i], "bay"+str(i).zfill(2), "E"+str(i+1).zfill(2))
+
+for i in range(halfBays, 0, -1):
+    if i > 1:
+        bubbles(GridCrvs1[i+(2*(halfBays-i))], "bay"+str(i+(2*(halfBays-i))).zfill(2), "E"+str(i).zfill(2))
+        bubbles(GridCrvs1a[i+(2*(halfBays-i))], "bay"+str(i+(2*(halfBays-i))).zfill(2), "E"+str(i-1).zfill(2) )
+
+print "lol"
+
+rs.EnableRedraw(False)
+
