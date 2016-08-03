@@ -1,0 +1,158 @@
+import xlrd
+import xlwt
+import System
+
+import Rhino.Geometry
+import Rhino.RhinoDoc
+import scriptcontext as sc
+import rhinoscriptsyntax as rs
+
+
+# for accesssing GH classes
+import clr
+clr.AddReference("Grasshopper")
+import Grasshopper
+
+import os
+
+def must_open(dirpath, filename):
+    return dirpath.endswith("C_Subtitles/") and filename.endswith(".xls")
+
+def opened_files(*args):
+    for dirpath, dirnames, filenames in os.walk(*args):
+        for filename in filenames:
+            if must_open(dirpath, filename):
+                filepath = os.path.join(dirpath, filename)
+                yield filepath
+
+
+def prep(o):
+    if type(o) == float:
+        return str(int(o)).zfill(2)
+    return o
+
+def WriteText(text, plane, dim, surf):
+    if surf:
+        cmd = "-_TextObject Height=" + str(dim) + " \"" + text + "\" "
+        cmd += str(plane.Origin[0]) + "," + str(plane.Origin[1]) + "," + str(plane.Origin[2])
+        cmd += " Enter"
+        rs.Command(cmd)
+    else:
+        t = Rhino.Geometry.TextEntity()
+        t.Text = text
+        t.Scale(dim)
+        t.Plane = plane
+        sc.doc.Objects.AddText(t)
+
+
+def MakeBadge(num, text, dim, sheet, x, y, size, surf):
+
+    X = float(x) 
+    Y = float(y) - 5
+
+    orig = Rhino.Geometry.Point3d(X,Y,0)
+
+    originPlane = Rhino.Geometry.Plane(orig, Rhino.Geometry.Vector3d.XAxis, Rhino.Geometry.Vector3d.YAxis)
+
+    WriteText(num, originPlane, size, surf)
+
+    originPlane.Transform(Rhino.Geometry.Transform.Translation(Rhino.Geometry.Vector3d(size*1.5,size/2.0,0)))
+
+    WriteText(text, originPlane, size/2.0, surf)
+
+    originPlane.Transform(Rhino.Geometry.Transform.Translation(Rhino.Geometry.Vector3d(0,-size/2.0,0)))
+
+    WriteText(dim, originPlane, size/4.0, surf)
+
+    rs.AddLine(
+        orig+Rhino.Geometry.Point3d(size*1.5,size/2.0-0.5,0), 
+        orig+Rhino.Geometry.Point3d(size*1.5+60,size/2.0-0.5,0)
+    )
+
+    return 
+
+def SaveDrawing(filename):
+    
+    fo = Rhino.FileIO.FileWriteOptions()
+    fo.FileVersion = 4
+
+    return Rhino.RhinoDoc.WriteFile(Rhino.RhinoDoc.ActiveDoc, filename, fo)
+
+
+def LabelCurve(c, l):
+    a = []
+    for p in c.Points:
+        pp = p.Location
+        b,t = c.ClosestPoint(pp)
+        b,plane = c.FrameAt(t)
+        n = plane.YAxis
+        a.append(pp - 4.0*n)
+
+    return a
+
+def MakeDrawing(file):
+
+    # ideally this would be a bit nicer
+    rs.Command("_SelAll")
+    rs.Command("_Delete")
+
+    book = xlrd.open_workbook(file)
+     
+    sheet = book.sheets()[0] 
+    sheet = book.sheet_by_index(0) 
+     
+    r = sheet.row(0) 
+    c = sheet.col_values(0)
+
+    oldcontext = sc.doc
+    sc.doc = Rhino.RhinoDoc.ActiveDoc
+
+    #MakeSheet()
+
+    #tree = DataTree[System.Object]()
+    for i in range(sheet.nrows):
+        #path = GH_Path(i)
+
+        #tree.AddRange(map(prep,sheet.row_values(i)), path)
+        vals = sheet.row_values(i)[0:7]
+        args = map(prep, vals[0:6])
+        args.append(vals[6]/100.0)
+        args.append(drawAsSurface)
+        #print args
+        MakeBadge(*tuple(args))
+
+    outfile = file[:-4]+".dwg"
+
+    if SaveDrawing(outfile):
+        print "wrote " + outfile
+
+    sc.doc = oldcontext
+
+# main start of program
+
+if sc.doc.__class__ == Rhino.RhinoDoc:
+    print "Called from Rhino"
+
+    import os
+
+    drawAsSurface = False
+
+
+    path = 'the file path'
+    dirs = ["02_Columns"]
+
+    for subdir in dirs:
+        spath = path+subdir+"/C_Subtitles/"
+        for file in os.listdir(spath):
+            if file.endswith(".xls"):
+                print "Found an excel file: {}".format(file)
+                MakeDrawing(spath+file)
+
+
+else:
+    print "Called from Grasshopper"
+
+    if enable == False:
+        print "Sleeping"
+    else:
+        MakeDrawing(file)
